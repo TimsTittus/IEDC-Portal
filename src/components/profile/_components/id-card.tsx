@@ -22,9 +22,12 @@ import { cn } from "@/lib/utils";
 import { EditProfileDrawer } from "./edit-profile-drawer";
 
 export interface ProfileData {
+  id?: string;
+  userId?: string;
   name: string;
   role?: string;
   email?: string;
+  photoUrl?: string | null;
   iecdId?: string;
   admissionNumber?: string;
   department?: string;
@@ -322,13 +325,6 @@ export function IdCard({
       cancelled = true;
     };
   }, [githubUsername]);
-
-  const cleanUsername = (val?: string | null) => {
-    if (!val) return "";
-    let clean = val.trim().replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
-    clean = clean.replace(/^(github\.com|linkedin\.com\/in|linkedin\.com|behance\.net)\//i, "");
-    return clean.replace(/^in\//i, "");
-  };
 
   return (
     <div className={cn("relative flex w-full max-w-180 flex-col overflow-hidden rounded-[44px] border border-[#e8594c]/30 bg-[#0c0908] font-['Hanken_Grotesk'] text-white shadow-[0px_25px_70px_-15px_rgba(0,0,0,0.6)] transition-all", className)}>

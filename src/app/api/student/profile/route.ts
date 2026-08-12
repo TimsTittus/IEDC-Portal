@@ -2,32 +2,34 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { studentProfiles, facultyProfiles, users, eventAttendance, projects, certificates } from "@/db/schema";
-import { eq, count } from "drizzle-orm";
-import { updateProfileSchema } from "@/lib/validators";
+import { eq, count, or } from "drizzle-orm";
 import { generateIEDCId, getDeptCode } from "@/lib/iedc-id";
 import { generateQRDataURL } from "@/lib/qr";
 import { NextResponse } from "next/server";
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isUUID = (val: string | null): val is string => {
+  return typeof val === "string" && UUID_REGEX.test(val);
+};
 
 async function getSession() {
   return await auth.api.getSession({ headers: await headers() });
 }
 
 export async function GET(request: Request) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { searchParams } = new URL(request.url);
-  const targetIecdId = searchParams.get("iecdId");
+  const targetId = searchParams.get("id");
 
-  const role = (session.user as Record<string, unknown>).role as string;
+  if (targetId) {
+    if (!isUUID(targetId)) {
+      return NextResponse.json({ error: "Invalid profile ID format" }, { status: 400 });
+    }
 
-  if (targetIecdId) {
     const [profile] = await db
       .select()
       .from(studentProfiles)
-      .where(eq(studentProfiles.iecdId, targetIecdId));
+      .where(or(eq(studentProfiles.id, targetId), eq(studentProfiles.userId, targetId)));
 
     if (!profile) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
@@ -39,15 +41,36 @@ export async function GET(request: Request) {
       db.select({ count: count() }).from(certificates).where(eq(certificates.studentId, profile.id)),
     ]);
 
-    const { id, userId, qrHmacSecret, isDeleted, ...safe } = profile;
+    let userRole = "student";
+    let userPhoto = profile.photoUrl;
+
+    if (profile.userId) {
+      const [u] = await db
+        .select({ role: users.role, image: users.image })
+        .from(users)
+        .where(eq(users.id, profile.userId));
+      if (u?.role) userRole = u.role;
+      if (!userPhoto && u?.image) userPhoto = u.image;
+    }
+
+    const { qrHmacSecret, isDeleted, ...safe } = profile;
     return NextResponse.json({
       ...safe,
-      role: "student",
+      id: profile.id,
+      photoUrl: userPhoto || null,
+      role: userRole,
       eventsParticipatedCount: Number(eventsRes?.count || 0),
       projectsCount: Number(projectsRes?.count || 0),
       certificatesCount: Number(certsRes?.count || 0),
     });
   }
+
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const role = (session.user as Record<string, unknown>).role as string;
 
   if (role === "student") {
     let [profile] = await db
@@ -65,9 +88,10 @@ export async function GET(request: Request) {
       db.select({ count: count() }).from(certificates).where(eq(certificates.studentId, profile.id)),
     ]);
 
-    const { id, userId, qrHmacSecret, isDeleted, ...safe } = profile;
+    const { qrHmacSecret, isDeleted, ...safe } = profile;
     return NextResponse.json({
       ...safe,
+      id: profile.id,
       role,
       eventsParticipatedCount: Number(eventsRes?.count || 0),
       projectsCount: Number(projectsRes?.count || 0),
@@ -143,9 +167,11 @@ export async function GET(request: Request) {
         db.select({ count: count() }).from(certificates).where(eq(certificates.studentId, profile.id)),
       ]);
 
-      const { id, userId, qrHmacSecret, isDeleted, ...safe } = profile;
+      const { qrHmacSecret, isDeleted, ...safe } = profile;
       return NextResponse.json({
         ...safe,
+        id: profile.id,
+        userId: profile.userId,
         name: userName,
         role,
         designation: profile.bio || (role === "cto" ? "CTO (Chief Technical Officer)" : `${role.toUpperCase()} Member`),
@@ -156,6 +182,8 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
+      id: session.user.id,
+      userId: session.user.id,
       name: userName,
       email: user?.email || session.user.email,
       role,

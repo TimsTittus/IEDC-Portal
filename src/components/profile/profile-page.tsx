@@ -3,9 +3,9 @@
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
-import { Loader2, QrCode, LogOut, Download, ArrowLeft } from "lucide-react";
+import { Loader2, QrCode, LogOut, Share2, ArrowLeft, Check } from "lucide-react";
 import { toPng } from "html-to-image";
-import { IdCard, ProfileData } from "./_components/id-card";
+import { IdCard, ProfileData, formatDesignation } from "./_components/id-card";
 import { QrDialog } from "./_components/qr-dialog";
 import { ProfileDownloadCard } from "./_components/profile-download-card";
 
@@ -18,11 +18,12 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [editData, setEditData] = useState<Partial<ProfileData>>({});
   const [modalQrUrl, setModalQrUrl] = useState("");
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -109,9 +110,10 @@ export default function ProfilePage() {
     }
   };
 
-  const handleDownloadCard = async () => {
-    if (!downloadCardRef.current || downloading) return;
-    setDownloading(true);
+  const handleShareProfile = async () => {
+    if (!downloadCardRef.current || sharing) return;
+    setSharing(true);
+    setFeedbackMessage(null);
     try {
       const dataUrl = await toPng(downloadCardRef.current, {
         cacheBust: false,
@@ -119,17 +121,75 @@ export default function ProfilePage() {
         quality: 0.98,
         fontEmbedCSS: "",
       });
-      const link = document.createElement("a");
+
       const sanitizedName = (profile?.name || "profile")
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "_");
-      link.download = `${sanitizedName}_iedc_profile_card.png`;
-      link.href = dataUrl;
-      link.click();
+
+      const userUUID = profile?.id || profile?.userId || session?.user?.id || "";
+      const profileUrl = typeof window !== "undefined"
+        ? (userUUID ? `${window.location.origin}/profile?id=${userUUID}` : `${window.location.origin}/auth/login`)
+        : "";
+
+      const hasRole = profile?.role && profile.role.toLowerCase() !== "student";
+      const roleTitle = hasRole ? formatDesignation(profile.role) : "";
+      const intro = roleTitle
+        ? `I am ${profile?.name}, ${roleTitle} at IEDC SJCET.`
+        : `I am ${profile?.name}.`;
+
+      const domainUrl = typeof window !== "undefined" ? window.location.origin : "https://iedc.sjcet.in";
+      const shareText = `${intro}\nView profile: ${profileUrl}\nJoin IEDC SJCET: ${domainUrl}`;
+
+      let sharedNatively = false;
+
+      if (typeof navigator !== "undefined" && navigator.share) {
+        try {
+          const blob = await (await fetch(dataUrl)).blob();
+          const file = new File([blob], `${sanitizedName}_iedc_profile.png`, {
+            type: "image/png",
+          });
+
+          if (navigator.canShare && navigator.canShare({ files: [file], text: shareText })) {
+            await navigator.share({
+              title: `${profile?.name}'s Profile`,
+              text: shareText,
+              files: [file],
+            });
+            sharedNatively = true;
+          } else if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: `${profile?.name}'s Profile`,
+              text: shareText,
+              files: [file],
+            });
+            sharedNatively = true;
+          } else {
+            await navigator.share({
+              title: `${profile?.name}'s Profile`,
+              text: shareText,
+            });
+            sharedNatively = true;
+          }
+        } catch {
+          // Native share cancelled or failed
+        }
+      }
+
+      if (!sharedNatively) {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(shareText);
+        }
+        const link = document.createElement("a");
+        link.download = `${sanitizedName}_iedc_profile_card.png`;
+        link.href = dataUrl;
+        link.click();
+        setFeedbackMessage("Profile link copied to clipboard & image downloaded");
+        setTimeout(() => setFeedbackMessage(null), 4000);
+      }
     } catch (err) {
-      console.error("Failed to generate downloadable profile image:", err);
+      console.error("Failed to share profile:", err);
     } finally {
-      setDownloading(false);
+      setSharing(false);
     }
   };
 
@@ -149,7 +209,7 @@ export default function ProfilePage() {
     );
   }
 
-  const avatar = session?.user?.image || "/profile/avatar.png";
+  const avatar = profile?.photoUrl || session?.user?.image || "/profile/avatar.png";
   const nameUpper = profile?.name ? profile.name.toUpperCase() : "STUDENT NAME";
 
   return (
@@ -210,20 +270,27 @@ export default function ProfilePage() {
           saving={saving}
         />
 
-        {/* Download Card Action Outside Card */}
-        <div className="mt-8 flex items-center justify-center gap-4">
+        {/* Share Profile Action Outside Card */}
+        <div className="mt-8 flex flex-col items-center justify-center gap-3">
           <button
-            onClick={handleDownloadCard}
-            disabled={downloading}
+            onClick={handleShareProfile}
+            disabled={sharing}
             className="flex items-center gap-3 rounded-full border border-red-500/40 bg-linear-to-r from-red-600 to-red-700 px-8 py-4 text-sm font-bold text-white shadow-xl backdrop-blur-md transition-all hover:from-red-500 hover:to-red-600 hover:scale-105 hover:shadow-red-900/40 disabled:opacity-60 cursor-pointer active:scale-95"
           >
-            {downloading ? (
+            {sharing ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
-              <Download className="h-5 w-5" />
+              <Share2 className="h-5 w-5" />
             )}
-            <span className="tracking-wide">{downloading ? "Generating Card..." : "Download Profile Card"}</span>
+            <span className="tracking-wide">{sharing ? "Preparing Share..." : "Share Profile"}</span>
           </button>
+
+          {feedbackMessage && (
+            <div className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-xs font-semibold text-emerald-400 backdrop-blur-md animate-in fade-in slide-in-from-bottom-2">
+              <Check className="h-4 w-4" />
+              <span>{feedbackMessage}</span>
+            </div>
+          )}
         </div>
       </div>
 
