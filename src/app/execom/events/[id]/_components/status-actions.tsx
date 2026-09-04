@@ -1,6 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Loader2, Settings2 } from "lucide-react";
 import { EventDetail } from "../types";
 
@@ -13,6 +22,7 @@ interface StatusActionsProps {
 
 export function StatusActions({ event, updating, message, onUpdateStatus }: StatusActionsProps) {
   const currentStatus = event.status || "draft";
+  const [pendingAction, setPendingAction] = useState<{ label: string; value: string } | null>(null);
   const actions: Array<{ label: string; value: string; className: string }> = [];
 
   if (currentStatus === "draft") {
@@ -72,7 +82,11 @@ export function StatusActions({ event, updating, message, onUpdateStatus }: Stat
               size="sm"
               className={`h-[42px] px-6 rounded-full text-xs font-bold shadow-xs transition-all active:scale-98 cursor-pointer ${action.className}`}
               disabled={updating}
-              onClick={() => onUpdateStatus(action.value)}
+              onClick={() =>
+                action.value === "ongoing"
+                  ? setPendingAction(action)
+                  : onUpdateStatus(action.value)
+              }
             >
               {updating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               {action.label}
@@ -80,6 +94,41 @@ export function StatusActions({ event, updating, message, onUpdateStatus }: Stat
           ))
         )}
       </div>
+
+      <Dialog open={!!pendingAction} onOpenChange={(open) => !open && setPendingAction(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start this event?</DialogTitle>
+            <DialogDescription>
+              This will mark the event as ongoing. Are you sure you want to start it now?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full"
+              disabled={updating}
+              onClick={() => setPendingAction(null)}
+            >
+              No
+            </Button>
+            <Button
+              type="button"
+              className="rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white"
+              disabled={updating}
+              onClick={async () => {
+                if (!pendingAction) return;
+                await onUpdateStatus(pendingAction.value);
+                setPendingAction(null);
+              }}
+            >
+              {updating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Yes, start event
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -75,6 +75,7 @@ export function EventCard({
 
   const closed = isClosed || status === "completed" || status === "cancelled" || status === "closed" || dateHasPassed;
   const isOver = closed;
+  const closedLabel = status === "cancelled" ? "Cancelled" : status === "completed" ? "Completed" : "Closed";
   const displayCategory = formatCategoryName(eventType);
 
   return (
@@ -154,7 +155,7 @@ export function EventCard({
 
           {closed ? (
             <span className="inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-[#A5A5A5] text-white text-[10px] sm:text-[13px] font-medium shrink-0 w-fit">
-              Closed <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              {closedLabel} <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </span>
           ) : (
             <span className="inline-flex items-center justify-center gap-1 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full bg-[#100A0A] text-white text-[10px] sm:text-[13px] font-medium group-hover:bg-[#2A2020] transition-colors shrink-0 w-fit">
