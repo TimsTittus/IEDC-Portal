@@ -424,7 +424,7 @@ export default function ExecomEventDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           <span>Back to events</span>
         </Link>
-        {isExecom && !isEditing && (
+        {isExecom && !isEditing && event.status !== "completed" && (
           <Button
             className="h-[44px] px-6 rounded-full bg-[#D9383A] text-white text-xs font-bold shadow-sm hover:bg-[#b82b2d] active:scale-98 transition-all cursor-pointer flex items-center gap-2"
             onClick={startEdit}

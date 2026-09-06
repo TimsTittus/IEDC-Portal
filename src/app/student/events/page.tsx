@@ -12,6 +12,7 @@ const FILTER_ITEMS = [
   { key: "hackathon", label: "Hackathons" },
   { key: "gbm", label: "GBM" },
   { key: "tech_events", label: "Tech Events" },
+  { key: "completed", label: "Completed" },
 ];
 
 const TECHY_PEDIA_POSTER = `data:image/svg+xml;utf8,${encodeURIComponent(`
@@ -105,22 +106,37 @@ function StudentEventsContent() {
         if (res.ok) {
           const data = await res.json();
           if (data.events) {
+            const now = new Date();
             const apiEvents: EventCardProps[] = data.events.map(
-              (e: Record<string, unknown>) => ({
-                id: e.id as string,
-                title: e.title as string,
-                eventType: (e.eventType as string) || "workshop",
-                venue: (e.venue as string) || "IDEALab",
-                startDatetime: (e.startDatetime as string) || "",
-                endDatetime: (e.endDatetime as string) || "",
-                description: (e.description as string) || "",
-                posterUrl: (e.posterUrl as string) || null,
-                status: (e.status as string) || "published",
-                isClosed:
-                  e.status === "completed" ||
-                  e.status === "cancelled" ||
-                  e.status === "closed",
-              })
+              (e: Record<string, unknown>) => {
+                const startStr = (e.startDatetime as string) || "";
+                const endStr = (e.endDatetime as string) || "";
+                const startDate = startStr ? new Date(startStr) : null;
+                const endDate = endStr ? new Date(endStr) : null;
+                const dateHasPassed =
+                  startDate && !isNaN(startDate.getTime())
+                    ? endDate && !isNaN(endDate.getTime())
+                      ? endDate < now
+                      : startDate < now
+                    : false;
+
+                return {
+                  id: e.id as string,
+                  title: e.title as string,
+                  eventType: (e.eventType as string) || "workshop",
+                  venue: (e.venue as string) || "IDEALab",
+                  startDatetime: startStr,
+                  endDatetime: endStr,
+                  description: (e.description as string) || "",
+                  posterUrl: (e.posterUrl as string) || null,
+                  status: (e.status as string) || "published",
+                  isClosed:
+                    e.status === "completed" ||
+                    e.status === "cancelled" ||
+                    e.status === "closed" ||
+                    dateHasPassed,
+                };
+              }
             );
             setEvents(apiEvents);
           }
@@ -157,6 +173,13 @@ function StudentEventsContent() {
     const eventTypeLower = event.eventType.toLowerCase();
     const titleLower = event.title.toLowerCase();
     const activeTabLower = activeTab.toLowerCase();
+
+    if (activeTabLower === "completed") {
+      return (
+        event.isClosed && titleLower.includes(searchQuery.toLowerCase())
+      );
+    }
+    if (event.isClosed) return false;
 
     let matchesTab = activeTab === "all";
     if (!matchesTab) {

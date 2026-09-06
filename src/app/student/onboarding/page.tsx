@@ -23,7 +23,6 @@ import {
   Hash,
   Phone,
   ArrowRight,
-  Sparkles,
   AlertCircle,
   ShieldCheck,
 } from "lucide-react";
@@ -82,7 +81,6 @@ export default function StudentOnboardingPage() {
   const [batch, setBatch] = useState("");
   const [admissionNumber, setAdmissionNumber] = useState("");
   const [phone, setPhone] = useState("");
-  const [autoFilled, setAutoFilled] = useState(false);
 
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -93,17 +91,13 @@ export default function StudentOnboardingPage() {
       setName(session.user?.name || "");
       const parsed = parseStudentEmail(session.user?.email || "");
       if (parsed) {
-        let filled = false;
         const matchedDept = DEPARTMENTS.find(d => d.value.toLowerCase() === parsed.deptCode?.toLowerCase());
         if (matchedDept) {
           setDepartment(matchedDept.value);
-          filled = true;
         }
         if (parsed.batch) {
           setBatch(parsed.batch);
-          filled = true;
         }
-        setAutoFilled(filled);
       }
     }
   }, [session, isPending]);
@@ -193,16 +187,6 @@ export default function StudentOnboardingPage() {
             Set up your student profile to access event points, certificates, and your digital IEDC ID card.
           </p>
         </div>
-
-        {/* Auto-fill notification badge */}
-        {autoFilled && (
-          <div className="bg-[#FAE9CF]/80 border border-[#E6D4B5] rounded-2xl p-3.5 flex items-center gap-3 text-xs font-semibold text-[#664614] shadow-sm">
-            <div className="w-7 h-7 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4 text-amber-700" />
-            </div>
-            <span>Department and batch details auto-detected from your college email!</span>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -311,10 +295,13 @@ export default function StudentOnboardingPage() {
               <Input
                 id="phone"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 className="rounded-2xl h-12 bg-slate-50/70 border-gray-200 focus:bg-white text-sm font-medium transition-all"
                 placeholder="10-digit mobile number"
                 type="tel"
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                maxLength={10}
                 required
               />
             </div>
@@ -359,4 +346,3 @@ export default function StudentOnboardingPage() {
     </div>
   );
 }
-
