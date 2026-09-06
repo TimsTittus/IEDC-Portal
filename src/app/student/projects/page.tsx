@@ -28,6 +28,7 @@ import {
   Users,
   CheckCircle2,
   XCircle,
+  Clock,
   Globe,
   Award,
   Sparkles,
@@ -98,10 +99,20 @@ interface CollaborationItem {
   applicant: ApplicantProfile;
 }
 
+interface MyApplication {
+  id: string;
+  projectId: string;
+  domain: string;
+  message?: string | null;
+  status: "pending" | "accepted" | "rejected";
+  appliedAt: string | null;
+  project?: ProjectData | null;
+}
+
 export default function StudentProjectsPage() {
   const [projects, setProjects] = useState<ProjectData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"browse" | "my">("browse");
+  const [activeTab, setActiveTab] = useState<"browse" | "my" | "collabs">("browse");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Edit / Resubmit state
@@ -134,7 +145,20 @@ export default function StudentProjectsPage() {
   // Applicant Profile Viewer Modal state
   const [viewingApplicantProfile, setViewingApplicantProfile] = useState<ApplicantProfile | null>(null);
 
+  // Collaboration requests sent by the signed-in student
+  const [myApplications, setMyApplications] = useState<MyApplication[]>([]);
+  const [myProfileId, setMyProfileId] = useState<string | null>(null);
+  const [viewingApplicationsFor, setViewingApplicationsFor] = useState<ProjectData | null>(null);
+
   const fetchProjects = async () => {
+    // The Collabs tab is rendered from the student's accepted applications,
+    // which already carry their project payload.
+    if (activeTab === "collabs") {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const url =
@@ -172,11 +196,49 @@ export default function StudentProjectsPage() {
     }
   };
 
+  const fetchMyApplications = async () => {
+    try {
+      const res = await fetch("/api/projects/my-applications");
+      if (res.ok) {
+        const data = await res.json();
+        setMyApplications(data.applications || []);
+        setMyProfileId(data.profileId || null);
+      }
+    } catch (error) {
+      console.error("Failed to fetch my applications:", error);
+    }
+  };
+
   useEffect(() => {
     fetchProjects();
+    fetchMyApplications();
   }, [activeTab]);
 
-  const filteredProjects = projects.filter((project) => {
+  const applicationsFor = (projectId: string) =>
+    myApplications.filter((a) => a.projectId === projectId);
+
+  const isAcceptedCollaborator = (projectId: string) =>
+    myApplications.some((a) => a.projectId === projectId && a.status === "accepted");
+
+  // Projects the student was accepted to collaborate on, deduped across domains
+  const collabProjects: ProjectData[] = Array.from(
+    myApplications
+      .filter((a) => a.status === "accepted" && a.project)
+      .reduce((map, a) => {
+        if (!map.has(a.projectId)) map.set(a.projectId, a.project as ProjectData);
+        return map;
+      }, new Map<string, ProjectData>())
+      .values()
+  );
+
+  const visibleProjects =
+    activeTab === "collabs"
+      ? collabProjects
+      : activeTab === "browse"
+        ? projects.filter((p) => !isAcceptedCollaborator(p.id))
+        : projects;
+
+  const filteredProjects = visibleProjects.filter((project) => {
     const title = project.title.toLowerCase();
     const desc = (project.description || "").toLowerCase();
     const tags = (project.tags || []).join(" ").toLowerCase();
@@ -245,7 +307,10 @@ export default function StudentProjectsPage() {
   // Open Apply to Contribute modal
   const openApplyModal = (project: ProjectData) => {
     setApplyingProject(project);
-    const roles = project.contributorRoles || [];
+    const appliedDomains = applicationsFor(project.id).map((a) => a.domain);
+    const roles = (project.contributorRoles || []).filter(
+      (role) => !appliedDomains.includes(role)
+    );
     setSelectedDomain(roles.length > 0 ? roles[0] : "");
     setCustomDomainInput("");
     setApplyMessage("");
@@ -281,6 +346,7 @@ export default function StudentProjectsPage() {
       const data = await res.json();
       if (res.ok) {
         setApplySuccess(`Application submitted successfully for ${domainToApply}!`);
+        fetchMyApplications();
         setTimeout(() => {
           setApplyingProject(null);
           setApplySuccess("");
@@ -341,6 +407,30 @@ export default function StudentProjectsPage() {
       console.error("Failed to update status:", error);
     } finally {
       setUpdatingCollabId(null);
+    }
+  };
+
+  const getApplicationStatusBadge = (status: string | null) => {
+    switch (status) {
+      case "accepted":
+        return (
+          <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full text-[11px] font-bold px-2.5 py-0.5 shrink-0 flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Accepted
+          </span>
+        );
+      case "rejected":
+        return (
+          <span className="bg-rose-50 text-rose-700 border border-rose-200/80 rounded-full text-[11px] font-bold px-2.5 py-0.5 shrink-0 flex items-center gap-1">
+            <XCircle className="w-3 h-3" /> Rejected
+          </span>
+        );
+      case "pending":
+      default:
+        return (
+          <span className="bg-amber-50 text-amber-800 border border-amber-200/80 rounded-full text-[11px] font-bold px-2.5 py-0.5 shrink-0 flex items-center gap-1">
+            <Clock className="w-3 h-3" /> Pending
+          </span>
+        );
     }
   };
 
@@ -435,6 +525,29 @@ export default function StudentProjectsPage() {
             >
               My Submissions
             </button>
+            <button
+              onClick={() => setActiveTab("collabs")}
+              className={cn(
+                "inline-flex items-center gap-1.5 justify-center px-5 py-1.5 rounded-[26.92px] border text-[13.026px] font-medium tracking-[-0.391px] whitespace-nowrap transition-all duration-200 cursor-pointer h-[36px]",
+                activeTab === "collabs"
+                  ? "bg-[#100A0A] border-[#A5A5A5] text-white shadow-sm"
+                  : "bg-[#E2E2E2] border-[#A5A5A5] text-[#3C3C3C] hover:bg-gray-200"
+              )}
+            >
+              Collabs
+              {collabProjects.length > 0 && (
+                <span
+                  className={cn(
+                    "min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center",
+                    activeTab === "collabs"
+                      ? "bg-emerald-500 text-white"
+                      : "bg-emerald-600 text-white"
+                  )}
+                >
+                  {collabProjects.length}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Search Input */}
@@ -470,10 +583,24 @@ export default function StudentProjectsPage() {
         </div>
       ) : filteredProjects.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-[1014px] pt-2">
-          {filteredProjects.map((project) => (
+          {filteredProjects.map((project) => {
+            const myApps = applicationsFor(project.id);
+            const hasApplied = activeTab !== "my" && myApps.length > 0;
+            const appliedDomains = myApps.map((a) => a.domain);
+            const acceptedDomains = myApps
+              .filter((a) => a.status === "accepted")
+              .map((a) => a.domain);
+            const isCollab = activeTab === "collabs";
+            const isOwnProject =
+              !!myProfileId && project.submittedBy === myProfileId;
+
+            return (
             <div
               key={project.id}
-              className="w-full bg-white rounded-[32px] border border-gray-100/90 p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group relative overflow-hidden space-y-4"
+              className={cn(
+                "w-full bg-white rounded-[32px] border p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group relative overflow-hidden space-y-4",
+                hasApplied ? "border-emerald-300/80" : "border-gray-100/90"
+              )}
             >
               <div className="space-y-3">
                 {/* Top header row */}
@@ -489,6 +616,21 @@ export default function StudentProjectsPage() {
                     )}
                   </div>
                   {activeTab === "my" && getStatusBadge(project.status)}
+                  {activeTab === "browse" && isOwnProject && (
+                    <span className="bg-[#1A0D0C] text-white rounded-full text-xs font-bold px-3 py-0.5 shrink-0 flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> Your Project
+                    </span>
+                  )}
+                  {hasApplied && !isOwnProject && (
+                    <button
+                      onClick={() => setViewingApplicationsFor(project)}
+                      className="bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full text-xs font-bold px-3 py-0.5 shrink-0 flex items-center gap-1 hover:bg-emerald-100 transition-colors cursor-pointer"
+                      title="View your application"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {isCollab ? "Collaborator" : "Applied"}
+                    </button>
+                  )}
                 </div>
 
                 {/* Description */}
@@ -511,13 +653,22 @@ export default function StudentProjectsPage() {
                           Looking for Contributors
                         </span>
                       </div>
-                      {activeTab === "browse" && (
+                      {activeTab === "browse" && !hasApplied && !isOwnProject && (
                         <button
                           onClick={() => openApplyModal(project)}
                           className="px-3 py-1 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold flex items-center gap-1 transition-all shadow-2xs cursor-pointer active:scale-95"
                         >
                           <UserPlus className="w-3 h-3" />
                           Apply
+                        </button>
+                      )}
+                      {hasApplied && !isOwnProject && (
+                        <button
+                          onClick={() => setViewingApplicationsFor(project)}
+                          className="px-3 py-1 rounded-full bg-white text-emerald-800 border border-emerald-300 text-[11px] font-bold flex items-center gap-1 transition-all shadow-2xs cursor-pointer active:scale-95 hover:bg-emerald-50"
+                        >
+                          <CheckCircle2 className="w-3 h-3" />
+                          View Application
                         </button>
                       )}
                     </div>
@@ -528,13 +679,39 @@ export default function StudentProjectsPage() {
                         {project.contributorRoles.map((role, idx) => (
                           <span
                             key={idx}
-                            className="bg-emerald-100/90 text-emerald-900 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-300/60"
+                            className={cn(
+                              "text-[10px] font-bold px-2.5 py-0.5 rounded-full border",
+                              appliedDomains.includes(role)
+                                ? "bg-emerald-700 text-white border-emerald-700"
+                                : "bg-emerald-100/90 text-emerald-900 border-emerald-300/60"
+                            )}
                           >
                             {role}
+                            {appliedDomains.includes(role) ? " ✓" : ""}
                           </span>
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Accepted collaboration roles */}
+                {isCollab && acceptedDomains.length > 0 && (
+                  <div className="p-3.5 rounded-[22px] bg-emerald-700 text-white space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-100">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      You are collaborating as
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {acceptedDomains.map((domain) => (
+                        <span
+                          key={domain}
+                          className="bg-white/15 border border-white/25 text-[11px] font-bold px-2.5 py-0.5 rounded-full"
+                        >
+                          {domain}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -593,16 +770,42 @@ export default function StudentProjectsPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Browse tab: Apply button */}
-                  {activeTab === "browse" && project.lookingForContributors && (
-                    <button
-                      onClick={() => openApplyModal(project)}
-                      className="h-[34px] px-4 rounded-full bg-[#100A0A] hover:bg-[#2A2020] text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
-                    >
-                      <UserPlus className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Contribute</span>
-                    </button>
-                  )}
+                  {/* Browse tab: owners manage their own project's applicants */}
+                  {activeTab === "browse" &&
+                    isOwnProject &&
+                    project.lookingForContributors && (
+                      <button
+                        onClick={() => openManageApplicantsModal(project)}
+                        className="h-[34px] px-4 rounded-full bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Applicants</span>
+                      </button>
+                    )}
+
+                  {activeTab !== "my" &&
+                    !isOwnProject &&
+                    (project.lookingForContributors || hasApplied) &&
+                    (hasApplied ? (
+                      <button
+                        onClick={() => setViewingApplicationsFor(project)}
+                        className="h-[34px] px-4 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>
+                          {isCollab ? "My Role" : "Applied"}
+                          {!isCollab && myApps.length > 1 ? ` (${myApps.length})` : ""}
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => openApplyModal(project)}
+                        className="h-[34px] px-4 rounded-full bg-[#100A0A] hover:bg-[#2A2020] text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
+                      >
+                        <UserPlus className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Contribute</span>
+                      </button>
+                    ))}
 
                   {/* My Submissions tab: Manage Applicants button */}
                   {activeTab === "my" && project.lookingForContributors && (
@@ -631,7 +834,8 @@ export default function StudentProjectsPage() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         /* Empty State */
@@ -640,14 +844,22 @@ export default function StudentProjectsPage() {
             <FolderOpen className="w-10 h-10" />
           </div>
           <h3 className="text-2xl font-semibold text-[#1A0D0C] tracking-tight">
-            {activeTab === "browse" ? "No Approved Projects Found" : "No Submissions Yet"}
+            {activeTab === "browse"
+              ? "No Approved Projects Found"
+              : activeTab === "collabs"
+                ? "No Collaborations Yet"
+                : "No Submissions Yet"}
           </h3>
           <p className="text-gray-400 text-sm sm:text-base max-w-md mt-2 leading-relaxed">
             {activeTab === "browse"
               ? searchQuery
                 ? "No projects matched your search query. Try searching for something else."
                 : "Be the first student to submit and showcase your technical project!"
-              : "You haven't submitted any projects yet. Share your project with the IEDC SJCET community."}
+              : activeTab === "collabs"
+                ? searchQuery
+                  ? "None of your collaborations matched your search query."
+                  : "Projects you get accepted to contribute on will show up here. Apply from the Browse Projects tab."
+                : "You haven't submitted any projects yet. Share your project with the IEDC SJCET community."}
           </p>
 
           <Link
@@ -665,6 +877,94 @@ export default function StudentProjectsPage() {
           </Link>
         </div>
       )}
+
+      {/* 0. MY APPLICATION MODAL (APPLICANT VIEW) */}
+      <Dialog
+        open={!!viewingApplicationsFor}
+        onOpenChange={() => setViewingApplicationsFor(null)}
+      >
+        <DialogContent className="sm:max-w-md rounded-[32px] p-6 sm:p-8 bg-white border border-gray-100 shadow-2xl space-y-5 font-['Hanken_Grotesk'] text-[#1A0D0C] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-[#1A0D0C] flex items-center gap-2 tracking-tight">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Your Application
+            </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500 mt-1">
+              Domains you applied to contribute in on{" "}
+              <span className="font-bold text-gray-900">
+                {viewingApplicationsFor?.title}
+              </span>
+              .
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {(viewingApplicationsFor
+              ? applicationsFor(viewingApplicationsFor.id)
+              : []
+            ).map((app) => (
+              <div
+                key={app.id}
+                className="p-4 rounded-[22px] border border-gray-100 bg-gray-50/70 space-y-2"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      Domain / Role
+                    </p>
+                    <p className="text-sm font-bold text-[#1A0D0C]">{app.domain}</p>
+                  </div>
+                  {getApplicationStatusBadge(app.status)}
+                </div>
+
+                {app.message && (
+                  <div className="pt-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      Your Pitch Note
+                    </p>
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      {app.message}
+                    </p>
+                  </div>
+                )}
+
+                {app.appliedAt && (
+                  <p className="text-[11px] text-gray-400 font-medium">
+                    Applied on{" "}
+                    {new Date(app.appliedAt).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setViewingApplicationsFor(null)}
+              className="rounded-full text-xs px-5 h-[38px]"
+            >
+              Close
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                const project = viewingApplicationsFor;
+                setViewingApplicationsFor(null);
+                if (project) openApplyModal(project);
+              }}
+              className="h-[38px] px-5 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer active:scale-95"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Apply for another role
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 1. APPLY TO CONTRIBUTE MODAL */}
       <Dialog open={!!applyingProject} onOpenChange={() => setApplyingProject(null)}>
@@ -691,19 +991,30 @@ export default function StudentProjectsPage() {
                 Select Domain / Role <span className="text-rose-500">*</span>
               </Label>
               <div className="flex flex-wrap gap-2">
-                {(applyingProject?.contributorRoles || []).map((role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => setSelectedDomain(role)}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer border ${selectedDomain === role
-                      ? "bg-[#100A0A] text-white border-[#100A0A] shadow-2xs"
-                      : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
-                      }`}
-                  >
-                    {role} {selectedDomain === role ? "✓" : ""}
-                  </button>
-                ))}
+                {(applyingProject?.contributorRoles || []).map((role) => {
+                  const alreadyApplied = applyingProject
+                    ? applicationsFor(applyingProject.id).some((a) => a.domain === role)
+                    : false;
+                  return (
+                    <button
+                      key={role}
+                      type="button"
+                      disabled={alreadyApplied}
+                      onClick={() => setSelectedDomain(role)}
+                      title={alreadyApplied ? "You have already applied for this role" : undefined}
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border ${alreadyApplied
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 cursor-not-allowed"
+                        : selectedDomain === role
+                          ? "bg-[#100A0A] text-white border-[#100A0A] shadow-2xs cursor-pointer"
+                          : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 cursor-pointer"
+                        }`}
+                    >
+                      {alreadyApplied
+                        ? `${role} · Applied`
+                        : `${role} ${selectedDomain === role ? "✓" : ""}`}
+                    </button>
+                  );
+                })}
                 <button
                   type="button"
                   onClick={() => setSelectedDomain("custom")}

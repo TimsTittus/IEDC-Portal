@@ -57,7 +57,7 @@ export default function FacultyEventsPage() {
       ev.status === "closed" ||
       dateHasPassed;
 
-    let matchesFilter = activeFilter === "all";
+    let matchesFilter = activeFilter === "all" && !isCompleted;
     if (activeFilter === "completed") {
       matchesFilter = isCompleted;
     } else if (activeFilter === "published") {

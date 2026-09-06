@@ -79,10 +79,13 @@ export default function ExecomEventsPage() {
   }, []);
 
   const filteredEvents = events.filter((event) => {
-    if (activeTab === "all") return true;
+    if (activeTab === "all") return !event.isClosed;
     if (activeTab === "active") return !event.isClosed && event.status !== "draft";
     if (activeTab === "completed") return event.isClosed;
-    return event.eventType.toLowerCase().includes(activeTab.toLowerCase());
+    return (
+      !event.isClosed &&
+      event.eventType.toLowerCase().includes(activeTab.toLowerCase())
+    );
   });
 
   const activeCount = events.filter((e) => !e.isClosed && e.status !== "draft").length;
