@@ -253,12 +253,12 @@ export default function CertificatesPage() {
             <Award className="w-10 h-10" />
           </div>
           <h3 className="text-2xl font-semibold text-[#1A0D0C] tracking-tight">
-            No Certificates Found
+            Coming Soon
           </h3>
           <p className="text-gray-400 text-sm sm:text-base max-w-md mt-2 leading-relaxed">
             {searchQuery || activeTab !== "all"
               ? "No certificates matched your search or category filter. Try clearing filters."
-              : "You haven't earned any certificates yet. Participate in IEDC SJCET events and workshops to earn verified certificates!"}
+              : "The certificate engine is still being built. Your verified certificates for IEDC SJCET events and workshops will show up here once it goes live."}
           </p>
 
           <Link

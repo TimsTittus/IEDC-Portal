@@ -72,6 +72,8 @@ function HeaderContent({ items = [], role = "user" }: HeaderProps) {
   const isOnboardingPage = pathname.endsWith("/onboarding");
   const isExcludedPage = isProfilePage || isOnboardingPage;
   const isDashboardPage = pathname === "/student/dashboard";
+  // The header search drives the ?q= filter, which only the events listings use
+  const isEventsPage = pathname.endsWith("/events");
 
   useEffect(() => {
     if (session?.user && (userRole === "student" || isExecom)) {
@@ -156,19 +158,21 @@ function HeaderContent({ items = [], role = "user" }: HeaderProps) {
             </button>
 
             {/* Desktop Search Bar */}
-            <div className="hidden md:flex items-center flex-1 max-w-[640px] h-[63px] px-8 bg-white rounded-[31px] border border-gray-100 shadow-sm transition-all focus-within:shadow-md">
-              <Search className="w-5 h-5 text-[#00000069] mr-3 shrink-0" />
-              <input
-                type="text"
-                placeholder="Search here...."
-                value={currentSearch}
-                onChange={handleSearchChange}
-                className="w-full bg-transparent outline-none border-none text-[20px] font-['Hanken_Grotesk'] font-normal text-[#1A0D0C] placeholder:text-[#00000069] tracking-[-0.6px]"
-              />
-            </div>
+            {isEventsPage && (
+              <div className="hidden md:flex items-center flex-1 max-w-[640px] h-[63px] px-8 bg-white rounded-[31px] border border-gray-100 shadow-sm transition-all focus-within:shadow-md">
+                <Search className="w-5 h-5 text-[#00000069] mr-3 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search here...."
+                  value={currentSearch}
+                  onChange={handleSearchChange}
+                  className="w-full bg-transparent outline-none border-none text-[20px] font-['Hanken_Grotesk'] font-normal text-[#1A0D0C] placeholder:text-[#00000069] tracking-[-0.6px]"
+                />
+              </div>
+            )}
 
             {/* Expanded Mobile Search Input */}
-            {(isMobileSearchOpen || currentSearch) && (
+            {isEventsPage && (isMobileSearchOpen || currentSearch) && (
               <div className="flex md:hidden items-center flex-1 h-[56px] px-4 bg-white rounded-[28px] border border-gray-100 shadow-sm transition-all animate-in fade-in duration-200">
                 <Search className="w-5 h-5 text-[#00000069] mr-2 shrink-0" />
                 <input
@@ -197,7 +201,7 @@ function HeaderContent({ items = [], role = "user" }: HeaderProps) {
             )}
 
             <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
-              {!isMobileSearchOpen && !currentSearch && (
+              {isEventsPage && !isMobileSearchOpen && !currentSearch && (
                 <button
                   onClick={() => setIsMobileSearchOpen(true)}
                   className="flex md:hidden w-[56px] h-[56px] rounded-full bg-white items-center justify-center border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors cursor-pointer shrink-0"

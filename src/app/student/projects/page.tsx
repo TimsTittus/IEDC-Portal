@@ -862,19 +862,21 @@ export default function StudentProjectsPage() {
                 : "You haven't submitted any projects yet. Share your project with the IEDC SJCET community."}
           </p>
 
-          <Link
-            href="/student/projects/submit"
-            className="mt-6 inline-flex items-center justify-between w-[175px] h-[40px] pl-[20px] pr-[8px] py-[5px] rounded-[31px] text-white text-[14px] font-semibold tracking-[-0.45px] transition-transform active:scale-95 shadow-sm"
-            style={{
-              background:
-                "radial-gradient(133.5% 127.27% at 48.91% 127.27%, rgba(89, 7, 8, 0.23) 0%, rgba(102, 102, 102, 0.00) 100%), #0F0A0A",
-            }}
-          >
-            <span>Submit Project</span>
-            <span className="w-6 h-6 rounded-full bg-white text-black flex items-center justify-center">
-              <ArrowUpRight className="w-3.5 h-3.5 text-black" />
-            </span>
-          </Link>
+          {activeTab !== "collabs" && (
+            <Link
+              href="/student/projects/submit"
+              className="mt-6 inline-flex items-center justify-between w-[175px] h-[40px] pl-[20px] pr-[8px] py-[5px] rounded-[31px] text-white text-[14px] font-semibold tracking-[-0.45px] transition-transform active:scale-95 shadow-sm"
+              style={{
+                background:
+                  "radial-gradient(133.5% 127.27% at 48.91% 127.27%, rgba(89, 7, 8, 0.23) 0%, rgba(102, 102, 102, 0.00) 100%), #0F0A0A",
+              }}
+            >
+              <span>Submit Project</span>
+              <span className="w-6 h-6 rounded-full bg-white text-black flex items-center justify-center">
+                <ArrowUpRight className="w-3.5 h-3.5 text-black" />
+              </span>
+            </Link>
+          )}
         </div>
       )}
 
